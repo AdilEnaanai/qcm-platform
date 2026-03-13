@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+
+  backend:
+    image: enaanai/qcm-backend:latest
+    container_name: qcm_backend
+    restart: always
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: 1111
+      DB_NAME: qcm_platform
+    ports:
+      - "5000:5000"
+    networks:
+      - mysql_network
+
+  frontend:
+    image: enaanai/qcm-frontend:latest
+    container_name: qcm_frontend
+    restart: always
+    ports:
+      - "80:80"
+    networks:
+      - mysql_network
+
+networks:
+  mysql_network:
+    external: true
