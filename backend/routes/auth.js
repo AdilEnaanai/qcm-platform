@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
-
+//Edpoints d'authentification : register et login
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   const { email, password, first_name, last_name } = req.body;
