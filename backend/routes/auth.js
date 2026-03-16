@@ -16,6 +16,7 @@ router.post('/register', async (req, res) => {
       return res.status(409).json({ message: 'Email déjà utilisé' });
 
     const hashed = await bcrypt.hash(password, 10);
+    
     const [result] = await db.query(
       'INSERT INTO users (email, password, first_name, last_name) VALUES (?, ?, ?, ?)',
       [email, hashed, first_name, last_name]
@@ -27,6 +28,7 @@ router.post('/register', async (req, res) => {
     );
     res.status(201).json({ token, user: { id: result.insertId, email, first_name, last_name } });
   } catch (err) {
+    console.error(err.message);
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
 });
