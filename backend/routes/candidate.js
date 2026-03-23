@@ -12,12 +12,12 @@ router.get('/exam/:examId', async (req, res) => {
     if (exams.length === 0) return res.status(404).json({ message: 'Examen non trouvé ou inactif' });
 
     const [questions] = await db.query(
-      'SELECT id, question_text, media_type, media_url, order_index FROM questions WHERE exam_id = ? ORDER BY order_index',
+      'SELECT id, question_text, media_type, media_url, order_index FROM questions WHERE exam_id = ? ORDER BY id',
       [req.params.examId]
     );
     for (const q of questions) {
       const [choices] = await db.query(
-        'SELECT id, choice_text, order_index FROM choices WHERE question_id = ? ORDER BY order_index',
+        'SELECT id, choice_text, order_index FROM choices WHERE question_id = ? ORDER BY id',
         [q.id]
       );
       q.choices = choices; // no is_correct field exposed
