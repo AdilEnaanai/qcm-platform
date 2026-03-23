@@ -435,10 +435,132 @@ function ExamsTab({ exams, loading, token, onRefresh, onSelectExam, onViewResult
   );
 }
 
+// ── AI GENERATION MODAL ──
+function AIGenerateModal({ exam, token, onClose, onGenerated }) {
+  const [form, setForm] = useState({ topic: "", count: 5, level: "intermédiaire", language: "français" });
+  const [loading, setLoading] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [error, setError] = useState("");
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  async function generate(saveDirectly = false) {
+    if (!form.topic.trim()) return setError("Veuillez entrer un sujet");
+    setLoading(true); setError(""); setPreview(null);
+    try {
+      const data = await api.post(`/exams/${exam.id}/generate-questions`, { ...form, count: parseInt(form.count), save: saveDirectly }, token);
+      if (saveDirectly) {
+        onGenerated();
+        onClose();
+      } else {
+        setPreview(data.questions);
+      }
+    } catch (e) { setError(e.message || "Erreur lors de la génération"); }
+    setLoading(false);
+  }
+
+  async function savePreview() {
+    setLoading(true); setError("");
+    try {
+      await api.post(`/exams/${exam.id}/generate-questions`, { ...form, count: parseInt(form.count), save: true, questions: preview }, token);
+      onGenerated();
+      onClose();
+    } catch (e) { setError(e.message || "Erreur lors de la sauvegarde"); }
+    setLoading(false);
+  }
+
+  const levels = ["débutant", "intermédiaire", "avancé", "expert"];
+  const languages = ["français", "anglais", "arabe", "espagnol", "darija"];
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 16, width: "100%", maxWidth: 680, maxHeight: "90vh", overflowY: "auto" }}>
+        {/* Header */}
+        <div style={{ padding: "20px 24px 0", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div>
+            <h3 style={{ fontSize: 20, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ background: "linear-gradient(135deg,#8b5cf6,#3b82f6)", borderRadius: 8, padding: "4px 10px", fontSize: 14 }}>✨ IA</span>
+              Générer des questions automatiquement
+            </h3>
+            <p style={{ color: colors.muted, fontSize: 13, marginTop: 4 }}>Pour l'examen : <strong style={{ color: colors.text }}>{exam.title}</strong></p>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: colors.muted, fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
+        </div>
+
+        <div style={{ padding: "0 24px 24px" }}>
+          <Alert msg={error} />
+
+          {/* Form */}
+          <Textarea label="📚 Sujet / Thème de l'examen *" value={form.topic} onChange={set("topic")} placeholder="Ex: Les réseaux de neurones artificiels, La révolution française, Le droit des contrats..." style={{ minHeight: 70 }} />
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div>
+              <label style={{ fontSize: 13, color: colors.muted, display: "block", marginBottom: 6 }}>Nombre de questions</label>
+              <input type="number" min="1" max="20" value={form.count} onChange={set("count")}
+                style={{ width: "100%", padding: "10px 14px", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 8, color: colors.text }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 13, color: colors.muted, display: "block", marginBottom: 6 }}>Niveau</label>
+              <select value={form.level} onChange={set("level")} style={{ width: "100%", padding: "10px 14px", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 8, color: colors.text }}>
+                {levels.map(l => <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 13, color: colors.muted, display: "block", marginBottom: 6 }}>Langue</label>
+              <select value={form.language} onChange={set("language")} style={{ width: "100%", padding: "10px 14px", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 8, color: colors.text }}>
+                {languages.map(l => <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, marginBottom: preview ? 24 : 0 }}>
+            <Btn onClick={() => generate(false)} disabled={loading} variant="outline" style={{ flex: 1 }}>
+              {loading && !preview ? "⏳ Génération en cours..." : "👁 Prévisualiser"}
+            </Btn>
+            <Btn onClick={() => generate(true)} disabled={loading} style={{ flex: 1, background: "linear-gradient(135deg,#8b5cf6,#3b82f6)", border: "none" }}>
+              {loading ? "⏳ Génération..." : `✨ Générer et ajouter (${form.count} questions)`}
+            </Btn>
+          </div>
+
+          {/* Preview */}
+          {preview && (
+            <div className="fade-in">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <h4 style={{ color: colors.success }}>✅ {preview.length} questions générées — Aperçu</h4>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Btn onClick={() => generate(false)} disabled={loading} variant="ghost" size="sm">🔄 Regénérer</Btn>
+                  <Btn onClick={savePreview} disabled={loading} variant="success" size="sm">💾 Sauvegarder tout</Btn>
+                </div>
+              </div>
+              <div style={{ display: "grid", gap: 12, maxHeight: 420, overflowY: "auto", paddingRight: 4 }}>
+                {preview.map((q, idx) => (
+                  <div key={idx} style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 10, padding: 16 }}>
+                    <p style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>
+                      <span style={{ color: colors.accent, marginRight: 8 }}>Q{idx + 1}.</span>{q.question_text}
+                    </p>
+                    <div style={{ display: "grid", gap: 6 }}>
+                      {q.choices.map((c, ci) => (
+                        <div key={ci} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: c.is_correct ? colors.success + "18" : "transparent", border: `1px solid ${c.is_correct ? colors.success + "44" : colors.border}` }}>
+                          <span style={{ color: c.is_correct ? colors.success : colors.muted, fontSize: 12, fontWeight: 700, minWidth: 16 }}>{c.is_correct ? "✓" : "○"}</span>
+                          <span style={{ fontSize: 13, color: c.is_correct ? colors.success : colors.text }}>{c.choice_text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── QUESTIONS TAB ──
 function QuestionsTab({ exam, exams, token, onSelectExam }) {
   const [questions, setQuestions] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [showAI, setShowAI] = useState(false);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ question_text: "", media_type: "none", points: 1, choices: [{ choice_text: "", is_correct: true }, { choice_text: "", is_correct: false }, { choice_text: "", is_correct: false }, { choice_text: "", is_correct: false }] });
@@ -511,6 +633,7 @@ function QuestionsTab({ exam, exams, token, onSelectExam }) {
 
   return (
     <div className="fade-in">
+      {showAI && <AIGenerateModal exam={exam} token={token} onClose={() => setShowAI(false)} onGenerated={() => { setShowAI(false); load(); }} />}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
           <h2 style={{ fontSize: 22 }}>{exam.title}</h2>
@@ -518,6 +641,7 @@ function QuestionsTab({ exam, exams, token, onSelectExam }) {
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <Btn onClick={() => onSelectExam(null)} variant="ghost" size="sm">← Changer d'examen</Btn>
+          <Btn onClick={() => setShowAI(true)} variant="outline" size="sm" style={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}>✨ Générer par IA</Btn>
           <Btn onClick={startCreate}>+ Ajouter une question</Btn>
         </div>
       </div>

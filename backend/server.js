@@ -16,6 +16,7 @@ app.use('/uploads', express.static(path.join(__dirname, process.env.UPLOAD_DIR |
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/exams', require('./routes/exams'));
 app.use('/api/exams/:examId/questions', require('./routes/questions'));
+app.use('/api/exams/:examId/generate-questions', require('./routes/generate'));
 app.use('/api/candidate', require('./routes/candidate'));
 
 // Health check
