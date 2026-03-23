@@ -28,7 +28,7 @@ router.get('/', auth, async (req, res) => {
       return res.status(403).json({ message: 'Accès refusé' });
 
     const [questions] = await db.query(
-      'SELECT * FROM questions WHERE exam_id = ? ORDER BY order_index',
+      'SELECT * FROM questions WHERE exam_id = ? ORDER BY id',
       [req.params.examId]
     );
     for (const q of questions) {
