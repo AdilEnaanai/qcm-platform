@@ -3,7 +3,6 @@ const router = express.Router({ mergeParams: true });
 const db = require('../db');
 const auth = require('../middleware/auth');
 
-// Verify exam ownership
 async function verifyExamOwner(examId, userId) {
   const [rows] = await db.query('SELECT id FROM exams WHERE id = ? AND professor_id = ?', [examId, userId]);
   return rows.length > 0;
@@ -15,13 +14,13 @@ router.post('/', auth, async (req, res) => {
     if (!await verifyExamOwner(req.params.examId, req.user.id))
       return res.status(403).json({ message: 'Accès refusé' });
 
-    const { topic, count = 5, level = 'intermédiaire', language = 'français', save = false } = req.body;
+    const { topic, count = 5, level = 'intermédiaire', language = 'français', save = false, groqKey } = req.body;
 
     if (!topic) return res.status(400).json({ message: 'Le sujet est requis' });
     if (count < 1 || count > 20) return res.status(400).json({ message: 'Entre 1 et 20 questions' });
 
-    const GEMINI_API_KEY = req.body.geminiKey || process.env.GEMINI_API_KEY;
-    if (!GEMINI_API_KEY) return res.status(500).json({ message: "Clé API Google Gemini manquante. Configurez-la dans le modal IA ou dans le fichier .env" });
+    const GROQ_API_KEY = groqKey || process.env.GROQ_API_KEY;
+    if (!GROQ_API_KEY) return res.status(500).json({ message: 'Clé API Groq manquante. Configurez-la dans le modal IA.' });
 
     const prompt = `Tu es un expert en création d'examens universitaires. Génère exactement ${count} question(s) QCM (Questionnaire à Choix Multiple) sur le sujet suivant : "${topic}".
 
@@ -34,45 +33,36 @@ RÈGLES STRICTES :
 - Les questions doivent être claires, précises et pédagogiques
 - Les distracteurs (mauvaises réponses) doivent être plausibles mais clairement incorrects
 
-Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ou après, sans balises markdown, exactement dans ce format :
-{
-  "questions": [
-    {
-      "question_text": "Texte de la question ?",
-      "points": 1,
-      "choices": [
-        { "choice_text": "Réponse correcte", "is_correct": true },
-        { "choice_text": "Mauvaise réponse 1", "is_correct": false },
-        { "choice_text": "Mauvaise réponse 2", "is_correct": false },
-        { "choice_text": "Mauvaise réponse 3", "is_correct": false }
-      ]
-    }
-  ]
-}`;
+Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ou après, sans balises markdown :
+{"questions":[{"question_text":"...","points":1,"choices":[{"choice_text":"...","is_correct":true},{"choice_text":"...","is_correct":false},{"choice_text":"...","is_correct":false},{"choice_text":"...","is_correct":false}]}]}`;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-    const response = await fetch(geminiUrl, {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_API_KEY}`
+      },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 8192,
-          responseMimeType: 'application/json'
-        }
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: 'Tu es un expert pédagogue. Tu réponds TOUJOURS et UNIQUEMENT avec du JSON valide, sans markdown, sans texte avant ou après.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 8192,
+        response_format: { type: 'json_object' }
       })
     });
 
     if (!response.ok) {
       const err = await response.json();
-      const msg = err?.error?.message || 'Erreur API Gemini';
+      const msg = err?.error?.message || 'Erreur API Groq';
       return res.status(500).json({ message: msg });
     }
 
     const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) return res.status(500).json({ message: 'Réponse vide de Gemini' });
+    const text = data?.choices?.[0]?.message?.content;
+    if (!text) return res.status(500).json({ message: 'Réponse vide de Groq' });
 
     let parsed;
     try {
@@ -104,11 +94,7 @@ Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ou après, sans 
           );
         }
       }
-      return res.json({
-        message: `${parsed.questions.length} questions générées et sauvegardées`,
-        saved: true,
-        questions: parsed.questions
-      });
+      return res.json({ message: `${parsed.questions.length} questions générées et sauvegardées`, saved: true, questions: parsed.questions });
     }
 
     res.json({ questions: parsed.questions, saved: false });

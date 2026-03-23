@@ -437,7 +437,7 @@ function ExamsTab({ exams, loading, token, onRefresh, onSelectExam, onViewResult
 
 // ── AI GENERATION MODAL ──
 function AIGenerateModal({ exam, token, onClose, onGenerated }) {
-  const storedKey = localStorage.getItem("gemini_api_key") || "";
+  const storedKey = localStorage.getItem("groq_api_key") || "";
   const [apiKey, setApiKey] = useState(storedKey);
   const [keyConfirmed, setKeyConfirmed] = useState(!!storedKey);
   const [showKey, setShowKey] = useState(false);
@@ -450,12 +450,12 @@ function AIGenerateModal({ exam, token, onClose, onGenerated }) {
   function confirmKey() {
     const k = apiKey.trim();
     if (!k) return setError("Veuillez entrer votre clé API");
-    localStorage.setItem("gemini_api_key", k);
+    localStorage.setItem("groq_api_key", k);
     setKeyConfirmed(true);
     setError("");
   }
   function resetKey() {
-    localStorage.removeItem("gemini_api_key");
+    localStorage.removeItem("groq_api_key");
     setApiKey(""); setKeyConfirmed(false); setPreview(null); setError("");
   }
 
@@ -465,7 +465,7 @@ function AIGenerateModal({ exam, token, onClose, onGenerated }) {
     try {
       const data = await api.post(`/exams/${exam.id}/generate-questions`, {
         ...form, count: parseInt(form.count), save: saveDirectly,
-        geminiKey: localStorage.getItem("gemini_api_key")
+        groqKey: localStorage.getItem("groq_api_key")
       }, token);
       if (saveDirectly) { onGenerated(); onClose(); }
       else setPreview(data.questions);
@@ -478,7 +478,7 @@ function AIGenerateModal({ exam, token, onClose, onGenerated }) {
     try {
       await api.post(`/exams/${exam.id}/generate-questions`, {
         ...form, count: parseInt(form.count), save: true,
-        geminiKey: localStorage.getItem("gemini_api_key")
+        groqKey: localStorage.getItem("groq_api_key")
       }, token);
       onGenerated(); onClose();
     } catch (e) { setError(e.message || "Erreur lors de la sauvegarde"); }
@@ -496,7 +496,7 @@ function AIGenerateModal({ exam, token, onClose, onGenerated }) {
         <div style={{ padding: "20px 24px 0", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
             <h3 style={{ fontSize: 20, display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ background: "linear-gradient(135deg,#4285f4,#34a853)", borderRadius: 8, padding: "4px 10px", fontSize: 13, fontWeight: 700 }}>✨ Gemini</span>
+              <span style={{ background: "linear-gradient(135deg,#f55036,#f0a500)", borderRadius: 8, padding: "4px 10px", fontSize: 13, fontWeight: 700 }}>⚡ Groq</span>
               Générer des questions par IA
             </h3>
             <p style={{ color: colors.muted, fontSize: 13, marginTop: 4 }}>Examen : <strong style={{ color: colors.text }}>{exam.title}</strong></p>
@@ -507,17 +507,17 @@ function AIGenerateModal({ exam, token, onClose, onGenerated }) {
         <div style={{ padding: "0 24px 24px" }}>
           <Alert msg={error} />
 
-          {/* ── ÉTAPE 1 : Clé API ── */}
+          {/* ── ÉTAPE 1 : Clé API Groq ── */}
           {!keyConfirmed ? (
-            <div style={{ background: colors.surface, border: `1px solid #4285f444`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
-              <p style={{ fontWeight: 600, marginBottom: 6, fontSize: 15 }}>🔑 Étape 1 — Clé API Google Gemini (gratuite)</p>
+            <div style={{ background: colors.surface, border: `1px solid #f5503644`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
+              <p style={{ fontWeight: 600, marginBottom: 6, fontSize: 15 }}>🔑 Étape 1 — Clé API Groq (100% gratuite)</p>
               <p style={{ color: colors.muted, fontSize: 13, marginBottom: 14, lineHeight: 1.6 }}>
-                Obtenez votre clé gratuite sur{" "}
-                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer"
-                  style={{ color: "#4285f4", textDecoration: "underline" }}>
-                  aistudio.google.com/apikey
+                Obtenez votre clé gratuite en 1 minute sur{" "}
+                <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer"
+                  style={{ color: "#f55036", textDecoration: "underline" }}>
+                  console.groq.com/keys
                 </a>
-                {" "}— 1 500 requêtes/jour gratuites. La clé est sauvegardée localement dans votre navigateur.
+                {" "}→ Sign up → API Keys → Create. La clé commence par <code style={{ background: colors.bg, padding: "1px 6px", borderRadius: 4, fontSize: 12 }}>gsk_...</code>
               </p>
               <div style={{ display: "flex", gap: 8 }}>
                 <div style={{ position: "relative", flex: 1 }}>
@@ -526,24 +526,24 @@ function AIGenerateModal({ exam, token, onClose, onGenerated }) {
                     value={apiKey}
                     onChange={e => setApiKey(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && confirmKey()}
-                    placeholder="AIza..."
+                    placeholder="gsk_..."
                     style={{ width: "100%", padding: "10px 44px 10px 14px", background: colors.bg, border: `1px solid ${colors.border}`, borderRadius: 8, color: colors.text, fontSize: 14, fontFamily: "JetBrains Mono" }}
                   />
                   <button onClick={() => setShowKey(s => !s)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: colors.muted, fontSize: 16 }}>
                     {showKey ? "🙈" : "👁"}
                   </button>
                 </div>
-                <Btn onClick={confirmKey} style={{ background: "linear-gradient(135deg,#4285f4,#34a853)", border: "none" }}>Confirmer</Btn>
+                <Btn onClick={confirmKey} style={{ background: "linear-gradient(135deg,#f55036,#f0a500)", border: "none" }}>Confirmer</Btn>
               </div>
             </div>
           ) : (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#34a85318", border: "1px solid #34a85344", borderRadius: 10, padding: "10px 16px", marginBottom: 20 }}>
-              <span style={{ color: "#34a853", fontSize: 14, fontWeight: 600 }}>✅ Clé Google Gemini configurée</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f5503618", border: "1px solid #f5503644", borderRadius: 10, padding: "10px 16px", marginBottom: 20 }}>
+              <span style={{ color: "#f55036", fontSize: 14, fontWeight: 600 }}>⚡ Clé Groq configurée — Llama 3.3 70B prêt</span>
               <button onClick={resetKey} style={{ background: "none", border: "none", color: colors.muted, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>Changer</button>
             </div>
           )}
 
-          {/* ── ÉTAPE 2 : Paramètres de génération ── */}
+          {/* ── ÉTAPE 2 : Paramètres ── */}
           <div style={{ opacity: keyConfirmed ? 1 : 0.4, pointerEvents: keyConfirmed ? "auto" : "none" }}>
             <Textarea
               label="📚 Sujet / Thème de l'examen *"
@@ -576,8 +576,8 @@ function AIGenerateModal({ exam, token, onClose, onGenerated }) {
               <Btn onClick={() => generate(false)} disabled={loading} variant="outline" style={{ flex: 1 }}>
                 {loading && !preview ? "⏳ Génération en cours..." : "👁 Prévisualiser"}
               </Btn>
-              <Btn onClick={() => generate(true)} disabled={loading} style={{ flex: 1, background: "linear-gradient(135deg,#4285f4,#34a853)", border: "none" }}>
-                {loading ? "⏳ Génération..." : `✨ Générer et ajouter (${form.count} questions)`}
+              <Btn onClick={() => generate(true)} disabled={loading} style={{ flex: 1, background: "linear-gradient(135deg,#f55036,#f0a500)", border: "none" }}>
+                {loading ? "⏳ Génération..." : `⚡ Générer et ajouter (${form.count} questions)`}
               </Btn>
             </div>
 
