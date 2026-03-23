@@ -55,10 +55,16 @@ router.post('/', auth, upload.single('media'), async (req, res) => {
       media_url = `/uploads/${req.file.filename}`;
     }
 
+    // Calculer le prochain order_index
+const [[{ maxOrder }]] = await db.query(
+  'SELECT COALESCE(MAX(order_index), -1) AS maxOrder FROM questions WHERE exam_id = ?',
+  [req.params.examId]
+);
+const nextOrder = maxOrder + 1;
     const [result] = await db.query(
-      'INSERT INTO questions (exam_id, question_text, media_type, media_url, points, order_index) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.params.examId, question_text, media_type || 'none', media_url, points || 1, order_index || 0]
-    );
+  'INSERT INTO questions (exam_id, question_text, media_type, media_url, points, order_index) VALUES (?, ?, ?, ?, ?, ?)',
+  [req.params.examId, question_text, media_type || 'none', media_url, points || 1, nextOrder]
+);
     const questionId = result.insertId;
 
     // Insert choices
