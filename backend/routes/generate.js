@@ -20,8 +20,8 @@ router.post('/', auth, async (req, res) => {
     if (!topic) return res.status(400).json({ message: 'Le sujet est requis' });
     if (count < 1 || count > 20) return res.status(400).json({ message: 'Entre 1 et 20 questions' });
 
-    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-    if (!ANTHROPIC_API_KEY) return res.status(500).json({ message: 'Clé API Anthropic non configurée' });
+    const GEMINI_API_KEY = req.body.geminiKey || process.env.GEMINI_API_KEY;
+    if (!GEMINI_API_KEY) return res.status(500).json({ message: "Clé API Google Gemini manquante. Configurez-la dans le modal IA ou dans le fichier .env" });
 
     const prompt = `Tu es un expert en création d'examens universitaires. Génère exactement ${count} question(s) QCM (Questionnaire à Choix Multiple) sur le sujet suivant : "${topic}".
 
@@ -50,41 +50,42 @@ Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ou après, sans 
   ]
 }`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const response = await fetch(geminiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
-        messages: [{ role: 'user', content: prompt }]
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 8192,
+          responseMimeType: 'application/json'
+        }
       })
     });
 
     if (!response.ok) {
       const err = await response.json();
-      return res.status(500).json({ message: 'Erreur API Anthropic', error: err });
+      const msg = err?.error?.message || 'Erreur API Gemini';
+      return res.status(500).json({ message: msg });
     }
 
     const data = await response.json();
-    const text = data.content[0].text;
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) return res.status(500).json({ message: 'Réponse vide de Gemini' });
 
     let parsed;
     try {
       const clean = text.replace(/```json|```/g, '').trim();
       parsed = JSON.parse(clean);
     } catch {
-      return res.status(500).json({ message: 'Réponse IA invalide', raw: text });
+      return res.status(500).json({ message: 'Réponse IA invalide — format JSON incorrect', raw: text });
     }
 
     if (!parsed.questions || !Array.isArray(parsed.questions)) {
       return res.status(500).json({ message: 'Format de réponse IA invalide' });
     }
 
-    // If save=true, directly insert into DB
     if (save) {
       const [existing] = await db.query('SELECT COUNT(*) as cnt FROM questions WHERE exam_id = ?', [req.params.examId]);
       let orderIndex = existing[0].cnt;
@@ -103,7 +104,11 @@ Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ou après, sans 
           );
         }
       }
-      return res.json({ message: `${parsed.questions.length} questions générées et sauvegardées`, saved: true, questions: parsed.questions });
+      return res.json({
+        message: `${parsed.questions.length} questions générées et sauvegardées`,
+        saved: true,
+        questions: parsed.questions
+      });
     }
 
     res.json({ questions: parsed.questions, saved: false });

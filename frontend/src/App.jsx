@@ -437,23 +437,38 @@ function ExamsTab({ exams, loading, token, onRefresh, onSelectExam, onViewResult
 
 // ── AI GENERATION MODAL ──
 function AIGenerateModal({ exam, token, onClose, onGenerated }) {
+  const storedKey = localStorage.getItem("gemini_api_key") || "";
+  const [apiKey, setApiKey] = useState(storedKey);
+  const [keyConfirmed, setKeyConfirmed] = useState(!!storedKey);
+  const [showKey, setShowKey] = useState(false);
   const [form, setForm] = useState({ topic: "", count: 5, level: "intermédiaire", language: "français" });
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState("");
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
+  function confirmKey() {
+    const k = apiKey.trim();
+    if (!k) return setError("Veuillez entrer votre clé API");
+    localStorage.setItem("gemini_api_key", k);
+    setKeyConfirmed(true);
+    setError("");
+  }
+  function resetKey() {
+    localStorage.removeItem("gemini_api_key");
+    setApiKey(""); setKeyConfirmed(false); setPreview(null); setError("");
+  }
+
   async function generate(saveDirectly = false) {
     if (!form.topic.trim()) return setError("Veuillez entrer un sujet");
     setLoading(true); setError(""); setPreview(null);
     try {
-      const data = await api.post(`/exams/${exam.id}/generate-questions`, { ...form, count: parseInt(form.count), save: saveDirectly }, token);
-      if (saveDirectly) {
-        onGenerated();
-        onClose();
-      } else {
-        setPreview(data.questions);
-      }
+      const data = await api.post(`/exams/${exam.id}/generate-questions`, {
+        ...form, count: parseInt(form.count), save: saveDirectly,
+        geminiKey: localStorage.getItem("gemini_api_key")
+      }, token);
+      if (saveDirectly) { onGenerated(); onClose(); }
+      else setPreview(data.questions);
     } catch (e) { setError(e.message || "Erreur lors de la génération"); }
     setLoading(false);
   }
@@ -461,9 +476,11 @@ function AIGenerateModal({ exam, token, onClose, onGenerated }) {
   async function savePreview() {
     setLoading(true); setError("");
     try {
-      await api.post(`/exams/${exam.id}/generate-questions`, { ...form, count: parseInt(form.count), save: true, questions: preview }, token);
-      onGenerated();
-      onClose();
+      await api.post(`/exams/${exam.id}/generate-questions`, {
+        ...form, count: parseInt(form.count), save: true,
+        geminiKey: localStorage.getItem("gemini_api_key")
+      }, token);
+      onGenerated(); onClose();
     } catch (e) { setError(e.message || "Erreur lors de la sauvegarde"); }
     setLoading(false);
   }
@@ -472,84 +489,128 @@ function AIGenerateModal({ exam, token, onClose, onGenerated }) {
   const languages = ["français", "anglais", "arabe", "espagnol", "darija"];
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 16, width: "100%", maxWidth: 680, maxHeight: "90vh", overflowY: "auto" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 16, width: "100%", maxWidth: 700, maxHeight: "92vh", overflowY: "auto" }}>
+
         {/* Header */}
         <div style={{ padding: "20px 24px 0", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
             <h3 style={{ fontSize: 20, display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ background: "linear-gradient(135deg,#8b5cf6,#3b82f6)", borderRadius: 8, padding: "4px 10px", fontSize: 14 }}>✨ IA</span>
-              Générer des questions automatiquement
+              <span style={{ background: "linear-gradient(135deg,#4285f4,#34a853)", borderRadius: 8, padding: "4px 10px", fontSize: 13, fontWeight: 700 }}>✨ Gemini</span>
+              Générer des questions par IA
             </h3>
-            <p style={{ color: colors.muted, fontSize: 13, marginTop: 4 }}>Pour l'examen : <strong style={{ color: colors.text }}>{exam.title}</strong></p>
+            <p style={{ color: colors.muted, fontSize: 13, marginTop: 4 }}>Examen : <strong style={{ color: colors.text }}>{exam.title}</strong></p>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: colors.muted, fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: colors.muted, fontSize: 24, cursor: "pointer", lineHeight: 1 }}>×</button>
         </div>
 
         <div style={{ padding: "0 24px 24px" }}>
           <Alert msg={error} />
 
-          {/* Form */}
-          <Textarea label="📚 Sujet / Thème de l'examen *" value={form.topic} onChange={set("topic")} placeholder="Ex: Les réseaux de neurones artificiels, La révolution française, Le droit des contrats..." style={{ minHeight: 70 }} />
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
-            <div>
-              <label style={{ fontSize: 13, color: colors.muted, display: "block", marginBottom: 6 }}>Nombre de questions</label>
-              <input type="number" min="1" max="20" value={form.count} onChange={set("count")}
-                style={{ width: "100%", padding: "10px 14px", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 8, color: colors.text }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 13, color: colors.muted, display: "block", marginBottom: 6 }}>Niveau</label>
-              <select value={form.level} onChange={set("level")} style={{ width: "100%", padding: "10px 14px", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 8, color: colors.text }}>
-                {levels.map(l => <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 13, color: colors.muted, display: "block", marginBottom: 6 }}>Langue</label>
-              <select value={form.language} onChange={set("language")} style={{ width: "100%", padding: "10px 14px", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 8, color: colors.text }}>
-                {languages.map(l => <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, marginBottom: preview ? 24 : 0 }}>
-            <Btn onClick={() => generate(false)} disabled={loading} variant="outline" style={{ flex: 1 }}>
-              {loading && !preview ? "⏳ Génération en cours..." : "👁 Prévisualiser"}
-            </Btn>
-            <Btn onClick={() => generate(true)} disabled={loading} style={{ flex: 1, background: "linear-gradient(135deg,#8b5cf6,#3b82f6)", border: "none" }}>
-              {loading ? "⏳ Génération..." : `✨ Générer et ajouter (${form.count} questions)`}
-            </Btn>
-          </div>
-
-          {/* Preview */}
-          {preview && (
-            <div className="fade-in">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <h4 style={{ color: colors.success }}>✅ {preview.length} questions générées — Aperçu</h4>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Btn onClick={() => generate(false)} disabled={loading} variant="ghost" size="sm">🔄 Regénérer</Btn>
-                  <Btn onClick={savePreview} disabled={loading} variant="success" size="sm">💾 Sauvegarder tout</Btn>
+          {/* ── ÉTAPE 1 : Clé API ── */}
+          {!keyConfirmed ? (
+            <div style={{ background: colors.surface, border: `1px solid #4285f444`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
+              <p style={{ fontWeight: 600, marginBottom: 6, fontSize: 15 }}>🔑 Étape 1 — Clé API Google Gemini (gratuite)</p>
+              <p style={{ color: colors.muted, fontSize: 13, marginBottom: 14, lineHeight: 1.6 }}>
+                Obtenez votre clé gratuite sur{" "}
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer"
+                  style={{ color: "#4285f4", textDecoration: "underline" }}>
+                  aistudio.google.com/apikey
+                </a>
+                {" "}— 1 500 requêtes/jour gratuites. La clé est sauvegardée localement dans votre navigateur.
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ position: "relative", flex: 1 }}>
+                  <input
+                    type={showKey ? "text" : "password"}
+                    value={apiKey}
+                    onChange={e => setApiKey(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && confirmKey()}
+                    placeholder="AIza..."
+                    style={{ width: "100%", padding: "10px 44px 10px 14px", background: colors.bg, border: `1px solid ${colors.border}`, borderRadius: 8, color: colors.text, fontSize: 14, fontFamily: "JetBrains Mono" }}
+                  />
+                  <button onClick={() => setShowKey(s => !s)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: colors.muted, fontSize: 16 }}>
+                    {showKey ? "🙈" : "👁"}
+                  </button>
                 </div>
+                <Btn onClick={confirmKey} style={{ background: "linear-gradient(135deg,#4285f4,#34a853)", border: "none" }}>Confirmer</Btn>
               </div>
-              <div style={{ display: "grid", gap: 12, maxHeight: 420, overflowY: "auto", paddingRight: 4 }}>
-                {preview.map((q, idx) => (
-                  <div key={idx} style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 10, padding: 16 }}>
-                    <p style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>
-                      <span style={{ color: colors.accent, marginRight: 8 }}>Q{idx + 1}.</span>{q.question_text}
-                    </p>
-                    <div style={{ display: "grid", gap: 6 }}>
-                      {q.choices.map((c, ci) => (
-                        <div key={ci} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: c.is_correct ? colors.success + "18" : "transparent", border: `1px solid ${c.is_correct ? colors.success + "44" : colors.border}` }}>
-                          <span style={{ color: c.is_correct ? colors.success : colors.muted, fontSize: 12, fontWeight: 700, minWidth: 16 }}>{c.is_correct ? "✓" : "○"}</span>
-                          <span style={{ fontSize: 13, color: c.is_correct ? colors.success : colors.text }}>{c.choice_text}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#34a85318", border: "1px solid #34a85344", borderRadius: 10, padding: "10px 16px", marginBottom: 20 }}>
+              <span style={{ color: "#34a853", fontSize: 14, fontWeight: 600 }}>✅ Clé Google Gemini configurée</span>
+              <button onClick={resetKey} style={{ background: "none", border: "none", color: colors.muted, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>Changer</button>
             </div>
           )}
+
+          {/* ── ÉTAPE 2 : Paramètres de génération ── */}
+          <div style={{ opacity: keyConfirmed ? 1 : 0.4, pointerEvents: keyConfirmed ? "auto" : "none" }}>
+            <Textarea
+              label="📚 Sujet / Thème de l'examen *"
+              value={form.topic}
+              onChange={set("topic")}
+              placeholder="Ex: La factorisation algébrique, La Révolution française, Les réseaux informatiques..."
+            />
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+              <div>
+                <label style={{ fontSize: 13, color: colors.muted, display: "block", marginBottom: 6 }}>Nombre de questions</label>
+                <input type="number" min="1" max="20" value={form.count} onChange={set("count")}
+                  style={{ width: "100%", padding: "10px 14px", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 8, color: colors.text }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, color: colors.muted, display: "block", marginBottom: 6 }}>Niveau</label>
+                <select value={form.level} onChange={set("level")} style={{ width: "100%", padding: "10px 14px", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 8, color: colors.text }}>
+                  {levels.map(l => <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 13, color: colors.muted, display: "block", marginBottom: 6 }}>Langue</label>
+                <select value={form.language} onChange={set("language")} style={{ width: "100%", padding: "10px 14px", background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 8, color: colors.text }}>
+                  {languages.map(l => <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginBottom: preview ? 24 : 0 }}>
+              <Btn onClick={() => generate(false)} disabled={loading} variant="outline" style={{ flex: 1 }}>
+                {loading && !preview ? "⏳ Génération en cours..." : "👁 Prévisualiser"}
+              </Btn>
+              <Btn onClick={() => generate(true)} disabled={loading} style={{ flex: 1, background: "linear-gradient(135deg,#4285f4,#34a853)", border: "none" }}>
+                {loading ? "⏳ Génération..." : `✨ Générer et ajouter (${form.count} questions)`}
+              </Btn>
+            </div>
+
+            {/* Preview */}
+            {preview && (
+              <div className="fade-in" style={{ marginTop: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                  <h4 style={{ color: colors.success, fontSize: 15 }}>✅ {preview.length} questions générées — Aperçu</h4>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Btn onClick={() => generate(false)} disabled={loading} variant="ghost" size="sm">🔄 Regénérer</Btn>
+                    <Btn onClick={savePreview} disabled={loading} variant="success" size="sm">💾 Sauvegarder tout</Btn>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gap: 12, maxHeight: 440, overflowY: "auto", paddingRight: 4 }}>
+                  {preview.map((q, idx) => (
+                    <div key={idx} style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 10, padding: 16 }}>
+                      <p style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>
+                        <span style={{ color: colors.accent, marginRight: 8 }}>Q{idx + 1}.</span>{q.question_text}
+                      </p>
+                      <div style={{ display: "grid", gap: 6 }}>
+                        {q.choices.map((c, ci) => (
+                          <div key={ci} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: c.is_correct ? colors.success + "18" : "transparent", border: `1px solid ${c.is_correct ? colors.success + "44" : colors.border}` }}>
+                            <span style={{ color: c.is_correct ? colors.success : colors.muted, fontSize: 12, fontWeight: 700, minWidth: 16 }}>{c.is_correct ? "✓" : "○"}</span>
+                            <span style={{ fontSize: 13, color: c.is_correct ? colors.success : colors.text }}>{c.choice_text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
